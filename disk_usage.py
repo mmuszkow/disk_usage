@@ -1,30 +1,9 @@
 #!/usr/bin/env python3
 
-import matplotlib.pyplot as plt
-import numpy as np
 import os
+import os.path
 
-'''
-fig, ax = plt.subplots()
-
-size = 0.3
-vals = np.array([[60., 32.], [37., 40.], [29., 10.]])
-
-cmap = plt.get_cmap('tab20c')
-outer_colors = cmap(np.arange(3)*4)
-inner_colors = cmap(np.array([1, 2, 5, 6, 9, 10]))
-
-ax.pie(vals.sum(axis=1), autopct=lambda pct: func(pct), radius=1, colors=outer_colors,
-       wedgeprops=dict(width=size, edgecolor='w'))
-
-ax.pie(vals.flatten(), autopct=lambda pct: func(pct), radius=1-size, colors=inner_colors,
-       wedgeprops=dict(width=size, edgecolor='w'))
-
-ax.set(aspect='equal', title='Pie plot with `ax.pie`')
-plt.show()
-'''
-
-
+# calculates sizes for all directories up to defined depth
 def calculate_size(start_dir, depth = 4):
     dir_size = {}
 
@@ -61,11 +40,74 @@ def calculate_size(start_dir, depth = 4):
 
     return dir_size
 
+# tree node
+class Dir:
+    def __init__(self, name):
+        self.name = name
+        self.children = {}
+        self.size = 0
+
+    def get(self, name):
+        if not name in self.children:
+            self.children[name] = Dir(name)
+        return self.children[name]
+
+# dictionary to tree
+def make_tree(sizes):
+    root = Dir('/')
+    for dir_name in sizes:
+        dirs = dir_name.split(os.sep)
+        node = root
+        for d in dirs:
+            node = node.get(d)
+        node.size = sizes[dir_name]
+    return root
+
+# dictionary to file
 def save_to_file(sizes, fn):
     with open(fn, 'w') as out:
         for key in sorted(sizes, key=sizes.get, reverse=True):
             out.write(key.strip() + '\t' + str(sizes[key]) + '\n')
 
+# dictionary from file
+def load_from_file(fn):
+    sizes = {}
+    with open(fn, 'r') as inp:
+        for line in inp:
+            try:
+                dir_name, size = line.strip().split('\t')
+                sizes[dir_name] = int(size)
+            except:
+                print('Incorrect name', line)
+    return sizes
+
+# bytes to proper unit
+def int2bytes(val):
+    SUFFIX = ['B', 'KB', 'MB', 'GB', 'TB', 'PB']
+    suffix_id = 0
+    while val > 1024:
+        val /= 1024
+        suffix_id += 1
+    return '%.2f%s' % (val, SUFFIX[suffix_id])
+
+# pretty print
+def print_node(node, min_size = 10 * 1024 * 1024, indent = 0):
+    tab = ''
+    for i in range(indent): 
+        tab += '  '
+    print(tab, node.name, int2bytes(node.size))
+    for child in sorted(node.children.values(), key=lambda x : x.size, reverse=True):
+        if child.size > min_size:
+            print_node(child, min_size, indent + 1)
+
 if __name__ == '__main__':
+    # load and display old data
+    if os.path.isfile('out.txt'):
+        root = make_tree(load_from_file('out.txt'))
+        print_node(root)
+
+    # calculate, save and display current data
     save_to_file(calculate_size('/'), 'out.txt')
+    root = make_tree(load_from_file('out.txt'))
+    print_node(root)
 
